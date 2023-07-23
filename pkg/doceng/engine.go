@@ -77,13 +77,15 @@ func (e *DocEngine) background(
 		case command := <-commandsCh:
 			switch command.Kind {
 			case "reload":
-				e.logger.Info().
-					Msg("got reload command")
+				e.logger.Info().Msg("got reload command")
 
 				if err := runtime.Kill(); err != nil {
 					e.fatalErrCh <- fmt.Errorf("error killing runtime: %w", err)
 					return
 				}
+
+				<-runtime.Killed()
+				e.logger.Info().Msg("got runtime killed")
 
 				runtime, err = pkgsite.Run(e.logger, e.workdir, e.addr)
 				if err != nil {

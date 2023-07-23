@@ -4,21 +4,24 @@ import (
 	"bytes"
 	"context"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/rs/zerolog"
 )
 
 type Runtime struct {
-	args      []string
-	ctx       context.Context
-	cancelCtx context.CancelFunc
-	cmd       *exec.Cmd
-	stdout    *bytes.Buffer
-	stderr    *bytes.Buffer
-	done      bool
-	err       error
-	mu        *sync.Mutex
+	args            []string
+	ctx             context.Context
+	cancelCtx       context.CancelFunc
+	killedCtx       context.Context
+	killedCancelCtx context.CancelFunc
+	cmd             *exec.Cmd
+	stdout          *bytes.Buffer
+	stderr          *bytes.Buffer
+	done            bool
+	err             error
+	mu              *sync.Mutex
 }
 
 func Run(
@@ -33,23 +36,27 @@ func Run(
 	}
 
 	ctx, cancelCtx := context.WithCancel(context.Background())
+	killedCtx, killedCancelCtx := context.WithCancel(context.Background())
 
 	stdout := bytes.NewBuffer(nil)
 	stderr := bytes.NewBuffer(nil)
 
+	lgr.Info().Str("args", strings.Join(args, ",")).Msg("running pkgsite with args")
 	cmd := exec.CommandContext(ctx, "pkgsite", args...)
 	cmd.Dir = workdir
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
 	runtime := &Runtime{
-		args:      args,
-		ctx:       ctx,
-		cancelCtx: cancelCtx,
-		cmd:       cmd,
-		stdout:    stdout,
-		stderr:    stderr,
-		mu:        &sync.Mutex{},
+		args:            args,
+		ctx:             ctx,
+		cancelCtx:       cancelCtx,
+		killedCtx:       killedCtx,
+		killedCancelCtx: killedCancelCtx,
+		cmd:             cmd,
+		stdout:          stdout,
+		stderr:          stderr,
+		mu:              &sync.Mutex{},
 	}
 
 	go func() {
@@ -57,6 +64,7 @@ func Run(
 			runtime.mu.Lock()
 			defer runtime.mu.Unlock()
 			runtime.done = true
+			runtime.killedCancelCtx()
 		}()
 
 		if err := cmd.Run(); err != nil {
@@ -71,6 +79,11 @@ func Run(
 }
 
 func (r *Runtime) Kill() error {
+	// This will kill the process.
 	r.cancelCtx()
 	return nil
+}
+
+func (r *Runtime) Killed() <-chan struct{} {
+	return r.killedCtx.Done()
 }
