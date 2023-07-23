@@ -3,8 +3,8 @@ package giteng
 import (
 	"context"
 	"fmt"
-	"time"
 	"sync"
+	"time"
 
 	"github.com/xrash/watchpkgsite/pkg/git"
 

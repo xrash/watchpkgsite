@@ -98,7 +98,7 @@ func run(opts cliopts, args []string) int {
 				return 0
 			}
 			lgr.Error().Err(err).Msg("got fatal err")
-				cancelCtx()
+			cancelCtx()
 			return 1
 
 		case <-sigint:
